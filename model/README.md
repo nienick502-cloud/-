@@ -15,10 +15,10 @@ model/
 │   ├── preprocessor_config.json
 │   ├── vocab.txt
 │   └── pytorch_model.bin          # 照片 → 512维意境向量 / 与中文意境词库零样本计算余弦相似度
-├── emoset-vit/                    # 视觉情绪分类模型 (基于 EmoSet 情绪数据集微调的 ViT-Base)
+├── emoset-vit/                    # 历史目录名；实际为人脸表情识别模型，本项目不用于风景意境
 │   ├── config.json
 │   ├── preprocessor_config.json
-│   └── model.safetensors          # 识别照片基础情绪类别分布
+│   └── model.safetensors          # 识别人脸表情；不接入本轮语义匹配
 ├── clap-htsat-unfused/            # 音频段落跨模态特征提取模型 (laion/clap-htsat-unfused)
 │   ├── config.json
 │   ├── preprocessor_config.json

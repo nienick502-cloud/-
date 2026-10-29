@@ -114,7 +114,7 @@ const html = `<!DOCTYPE html>
   main {
     flex: 1;
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     align-items: center;
     gap: 96px;
     padding: 48px 0;
@@ -209,6 +209,9 @@ const html = `<!DOCTYPE html>
     font-size: 11px;
     color: var(--ink-3);
     letter-spacing: 0.16em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   /* 示例照片 */
@@ -239,6 +242,7 @@ const html = `<!DOCTYPE html>
 
   /* ---------- 音乐面板 ---------- */
   .panel {
+    min-width: 0;
     background: var(--glass);
     backdrop-filter: blur(40px) saturate(1.6);
     -webkit-backdrop-filter: blur(40px) saturate(1.6);
@@ -257,6 +261,7 @@ const html = `<!DOCTYPE html>
     text-transform: uppercase;
   }
   .title {
+    overflow-wrap: anywhere;
     margin-top: 12px;
     font-size: 36px;
     font-weight: 600;
@@ -395,6 +400,7 @@ const html = `<!DOCTYPE html>
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 12px;
     font-size: 12px;
     color: var(--ink-2);
     padding: 5px 8px;
@@ -412,10 +418,12 @@ const html = `<!DOCTYPE html>
     background: rgba(0,0,0,0.05);
   }
   .cand-row span:last-child {
+    flex-shrink: 0;
     font-variant-numeric: tabular-nums;
     color: var(--ink-3);
     font-size: 11px;
   }
+  .cand-row span:first-child { min-width: 0; overflow-wrap: anywhere; }
 
   /* 匹配依据 */
   .why {
@@ -451,6 +459,10 @@ const html = `<!DOCTYPE html>
   }
 
   .fade-swap { animation: fadeUp 0.7s var(--ease); }
+  .match-state { min-height: 18px; margin: 12px 0 4px; color: var(--ink-2); font-size: 12px; line-height: 1.6; }
+  .image-concepts { min-height: 18px; color: var(--ink-2); font-size: 12px; line-height: 1.6; }
+  .audio-notice { color: var(--ink-2); font-size: 12px; line-height: 1.6; margin-top: 8px; }
+  button:disabled { opacity: 0.4; cursor: wait; }
   @keyframes fadeUp {
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: none; }
@@ -462,6 +474,20 @@ const html = `<!DOCTYPE html>
     .polaroid { width: 300px; }
     .title { font-size: 28px; }
   }
+  @media (max-width: 600px) {
+    main { grid-template-columns: minmax(0, 1fr); padding: 36px 0; }
+    .polaroid { width: min(300px, calc(100vw - 64px)); }
+    .samples { gap: 10px; }
+    .panel { padding: 28px 20px; }
+    .controls { gap: 14px; }
+    .play { flex-shrink: 0; width: 48px; height: 48px; }
+    .text-btn { white-space: nowrap; }
+    .cand-row { align-items: flex-start; flex-direction: column; gap: 4px; }
+    .why div + div { padding-left: 10px; }
+    .why b { font-size: 13px; }
+    footer { height: auto; min-height: 64px; padding: 14px 0; flex-direction: column; align-items: flex-start; gap: 8px; }
+  }
+  @media (max-width: 480px) { .wordmark span { display: none; } }
 </style>
 </head>
 <body>
@@ -494,7 +520,7 @@ const html = `<!DOCTYPE html>
         </div>
 
         <div class="samples" id="samples">
-          <small>试试</small>
+          <small>演示图</small>
         </div>
         <input type="file" id="file" accept="image/*" hidden />
       </section>
@@ -506,6 +532,9 @@ const html = `<!DOCTYPE html>
           <p class="artist" id="artist">放入照片后，从 33 首曲目中找到最契合的那一段旋律</p>
           <div class="moods" id="moods"></div>
         </div>
+        <p class="match-state" id="matchStatus" role="status" aria-live="polite">放入照片，寻找此刻的声音</p>
+        <p class="match-state" id="localEntry" hidden><a href="http://127.0.0.1:8765/" style="color:inherit;text-underline-offset:3px">打开本地语义版</a></p>
+        <p class="image-concepts" id="imageConcepts"></p>
 
         <div class="timeline">
           <div class="tl-head">
@@ -524,12 +553,14 @@ const html = `<!DOCTYPE html>
           <div class="eq" id="eq"></div>
         </div>
 
+        <p class="audio-notice" id="audioNotice" role="status"></p>
+
         <div class="candidates" id="candidates" style="display:none"></div>
 
         <div class="why">
           <div><span>色温</span><b id="whyWarm">—</b></div>
           <div><span>明度</span><b id="whyLum">—</b></div>
-          <div><span>情绪能量</span><b id="whyEnergy">—</b></div>
+          <div><span>段落能量</span><b id="whyEnergy">—</b></div>
         </div>
       </section>
     </main>
@@ -548,7 +579,7 @@ const html = `<!DOCTYPE html>
 const LIBRARY = ${JSON.stringify(lib)};
 
 /* =========================================================
-   示例照片（程序生成的抽象色块，避免外部图片依赖）
+   演示占位：示例照片为程序生成的抽象色块，避免外部图片依赖
    ========================================================= */
 const SAMPLE_SCENES = [
   { stops: ['#2b3a67', '#c86b5a', '#f4b67a', '#f7dcb4'], sun: '#fff1d0', horizon: 0.62, ground: '#3a3f5c' },
@@ -712,6 +743,7 @@ let isPlaying = false;
 let fadeTimer = null;
 let loadedFile = '';
 let loopSegmentOnly = true;
+let playAttempt = 0;
 
 function fadeInAudio(targetVol = 0.92, durationMs = 2000) {
   clearInterval(fadeTimer);
@@ -729,28 +761,38 @@ function fadeInAudio(targetVol = 0.92, durationMs = 2000) {
 
 function startAudio(seekToSegStart = false) {
   if (state.songIndex < 0) return;
+  const attempt = ++playAttempt;
+  $('audioNotice').textContent = '';
   const song = LIBRARY[state.songIndex];
   const seg = song.segments[state.segIndex];
   const encodedSrc = song.file.split('/').map(encodeURIComponent).join('/');
 
   const playFromTarget = () => {
+    if (attempt !== playAttempt) return;
     if (seekToSegStart || audio.currentTime < seg[1] || audio.currentTime >= seg[2]) {
       audio.currentTime = seg[1];
     }
     fadeInAudio(0.92, 2000);
     audio.play().then(() => {
+      if (attempt !== playAttempt) return;
       isPlaying = true;
       setPlayIcon();
     }).catch(err => {
+      if (attempt !== playAttempt) return;
+      clearInterval(fadeTimer);
       console.warn('播放需用户交互触发:', err);
       isPlaying = false;
       setPlayIcon();
+      $('audioNotice').textContent = err.name === 'NotAllowedError'
+        ? '点击播放，听听这段旋律。' : '音频暂时无法播放，请检查本地曲目是否存在。';
     });
   };
 
   if (loadedFile !== song.file) {
     loadedFile = song.file;
+    audio.onloadedmetadata = () => playFromTarget();
     audio.src = encodedSrc;
+  } else if (audio.readyState < 1) {
     audio.onloadedmetadata = () => playFromTarget();
   } else {
     playFromTarget();
@@ -758,11 +800,20 @@ function startAudio(seekToSegStart = false) {
 }
 
 function stopAudio() {
+  playAttempt++;
+  audio.onloadedmetadata = null;
   clearInterval(fadeTimer);
   isPlaying = false;
   audio.pause();
   setPlayIcon();
 }
+
+audio.addEventListener('error', () => {
+  stopAudio();
+  loadedFile = '';
+  $('audioNotice').textContent = '音频暂时无法播放，请检查本地曲目是否存在。';
+});
+audio.addEventListener('ended', () => { isPlaying = false; setPlayIcon(); });
 
 audio.addEventListener('timeupdate', () => {
   if (state.songIndex < 0) return;
@@ -865,6 +916,7 @@ function renderCandidates() {
 function renderSong() {
   const song = LIBRARY[state.songIndex];
   const seg = song.segments[state.segIndex];
+  state.energy = seg[3];
 
   $('panel').classList.remove('idle');
   const block = $('songBlock');
@@ -925,9 +977,47 @@ const eqBars = [...eq.children];
 /* =========================================================
    放入照片
    ========================================================= */
-function loadPhoto(src, label, autoPlay = true) {
+let photoSequence = 0;
+let matchController = null;
+const semanticOrigin = location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
+$('localEntry').hidden = location.protocol !== 'file:';
+
+function setMatchingBusy(busy) {
+  ['play', 'nextBtn', 'loopModeBtn'].forEach(id => { $(id).disabled = busy; });
+}
+
+function validRanking(ranked) {
+  return Array.isArray(ranked) && ranked.length === LIBRARY.length
+    && ranked.every(p => p && Number.isInteger(p.songIndex) && Number.isInteger(p.segIndex)
+      && LIBRARY[p.songIndex]?.segments[p.segIndex] && Number.isFinite(p.score)
+      && Number.isFinite(p.energy) && p.file === LIBRARY[p.songIndex].file
+      && p.start === LIBRARY[p.songIndex].segments[p.segIndex][1]
+      && p.end === LIBRARY[p.songIndex].segments[p.segIndex][2])
+    && new Set(ranked.map(p => p.songIndex)).size === LIBRARY.length;
+}
+
+function loadPhoto(src, label, autoPlay = true, originalFile = null) {
+  const sequence = ++photoSequence;
+  matchController?.abort();
+  const controller = new AbortController();
+  matchController = controller;
+  stopAudio();
+  state.songIndex = -1;
+  state.rankedList = [];
+  renderCandidates();
+  $('panel').classList.add('idle');
+  $('title').textContent = '正在感受这张照片';
+  $('artist').textContent = '寻找与画面契合的一段旋律';
+  $('moods').replaceChildren();
+  $('track').replaceChildren();
+  $('imageConcepts').textContent = '';
+  $('audioNotice').textContent = '';
+  $('matchStatus').textContent = '正在本地匹配…';
+  setMatchingBusy(true);
   const img = new Image();
-  img.onload = () => {
+  img.onload = async () => {
+    if (src.startsWith('blob:')) URL.revokeObjectURL(src);
+    if (sequence !== photoSequence) return;
     $('empty')?.remove();
     const photo = $('photo');
     photo.querySelector('img')?.remove();
@@ -935,37 +1025,76 @@ function loadPhoto(src, label, autoPlay = true) {
     photo.appendChild(img);
 
     const features = analyzeImage(img);
-    const ranked = matchLibrary(features);
-    const pick = ranked[0];
-
     state.features = features;
+    const d = new Date();
+    $('captionMeta').textContent = d.getFullYear() + '.' + String(d.getMonth() + 1).padStart(2, '0')
+      + '.' + String(d.getDate()).padStart(2, '0') + '  ·  ' + label;
+    setFluidPalette(features.palette);
+
+    let ranked;
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 90000);
+    try {
+      const blob = originalFile || await (await fetch(src)).blob();
+      const form = new FormData();
+      form.append('file', blob, originalFile?.name || 'photo.jpg');
+      const response = await fetch(semanticOrigin + '/api/match', {
+        method: 'POST', body: form, signal: controller.signal
+      });
+      if (!response.ok) {
+        const error = new Error('本地语义服务未就绪');
+        error.status = response.status;
+        throw error;
+      }
+      const result = await response.json();
+      if (result.method !== 'semantic' || !validRanking(result.ranked)) {
+        const error = new Error('语义结果与页面曲库不一致');
+        error.status = 502;
+        error.code = 'library_mismatch';
+        throw error;
+      }
+      if (sequence !== photoSequence) return;
+      ranked = result.ranked;
+      $('matchStatus').textContent = '本地语义匹配';
+      const labels = (result.concepts || []).slice(0, 3).map(c => c.label).filter(x => typeof x === 'string');
+      $('imageConcepts').textContent = labels.length ? '画面意境 · ' + labels.join(' · ') : '';
+    } catch (error) {
+      if (sequence !== photoSequence) return;
+      ranked = matchLibrary(features);
+      $('matchStatus').textContent = error.code === 'library_mismatch' ? '色彩匹配 · 语义结果与页面曲库不一致'
+        : timedOut ? '色彩匹配 · 本地语义匹配超时'
+        : error.status ? '色彩匹配 · 本地语义服务未就绪' : '色彩匹配 · 本地语义服务未连接';
+      $('imageConcepts').textContent = '';
+      console.info('本次采用色彩规则：', error.message);
+    } finally {
+      clearTimeout(timer);
+    }
+    if (sequence !== photoSequence) return;
+    const pick = ranked[0];
     state.rankedList = ranked;
     state.rankCursor = 0;
     state.energy = pick.energy;
     state.songIndex = pick.songIndex;
     state.segIndex = pick.segIndex;
-
-    const d = new Date();
-    $('captionMeta').textContent = \`\${d.getFullYear()}.\${String(d.getMonth() + 1).padStart(2, '0')}.\${String(d.getDate()).padStart(2, '0')}  ·  \${label}\`;
-
-    setFluidPalette(features.palette);
-
-    setTimeout(() => {
-      renderSong();
-      if (autoPlay) startAudio(true);
-    }, 650);
+    setMatchingBusy(false);
+    renderSong();
+    if (autoPlay) startAudio(true);
+  };
+  img.onerror = () => {
+    if (src.startsWith('blob:')) URL.revokeObjectURL(src);
+    if (sequence !== photoSequence) return;
+    $('title').textContent = '这张照片暂时无法读取';
+    $('artist').textContent = '请试试 JPEG、PNG 或 WebP 图片';
+    $('matchStatus').textContent = '请重新选择照片';
+    setMatchingBusy(false);
   };
   img.src = src;
 }
 
 function readFile(file) {
   if (!file || !file.type.startsWith('image/')) return;
-  const r = new FileReader();
-  r.onload = e => {
-    document.querySelectorAll('.sample').forEach(s => s.classList.remove('active'));
-    loadPhoto(e.target.result, file.name.replace(/\\.[^.]+$/, '').slice(0, 16), true);
-  };
-  r.readAsDataURL(file);
+  document.querySelectorAll('.sample').forEach(s => s.classList.remove('active'));
+  loadPhoto(URL.createObjectURL(file), file.name.replace(/\\.[^.]+$/, '').slice(0, 16), true, file);
 }
 
 $('polaroid').onclick = () => $('file').click();
@@ -1000,7 +1129,7 @@ $('loopModeBtn').onclick = () => {
   $('loopModeBtn').textContent = loopSegmentOnly ? '段落循环' : '整首连播';
 };
 
-/* 示例照片 */
+/* 演示占位：以下示例均为程序生成的图片 */
 const sampleNames = ['黄昏', '夜色', '雪原', '午后'];
 SAMPLE_SCENES.forEach((s, i) => {
   const src = makeSample(s);
@@ -1010,7 +1139,7 @@ SAMPLE_SCENES.forEach((s, i) => {
   el.onclick = () => {
     document.querySelectorAll('.sample').forEach(x => x.classList.remove('active'));
     el.classList.add('active');
-    loadPhoto(src, sampleNames[i], true);
+    loadPhoto(src, sampleNames[i] + ' · 演示图', true);
   };
   $('samples').appendChild(el);
 });

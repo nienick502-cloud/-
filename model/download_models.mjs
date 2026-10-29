@@ -4,7 +4,7 @@
  * 包含模型：
  *   1. allin1 (taejunkim/allinone) — 音乐曲式结构切分模型 (前奏/主歌/副歌/桥段/尾奏)
  *   2. Chinese-CLIP (OFA-Sys/chinese-clip-vit-base-patch16) — 中文跨模态视觉意境零样本模型
- *   3. EmoSet-ViT (jihedjabnoun/vit-face-emotion-recognition) — 视觉情绪分类小模型
+ *   3. 历史目录 EmoSet-ViT (jihedjabnoun/vit-face-emotion-recognition) — 人脸表情模型，不用于风景意境
  *   4. LAION-CLAP (laion/clap-htsat-unfused) — 音乐段落特征提取与跨模态对齐模型
  */
 
@@ -36,7 +36,7 @@ const MODELS = [
     filter: (f) => f !== 'clip_cn_vit-b-16.pt' && !f.startsWith('.git')
   },
   {
-    name: 'EmoSet-ViT (图像情绪识别模型)',
+    name: '人脸表情识别模型 (历史目录 emoset-vit，不用于风景意境)',
     repo: 'jihedjabnoun/vit-face-emotion-recognition',
     localDir: path.join(__dirname, 'emoset-vit'),
     filter: (f) => !f.startsWith('.git')

@@ -26,3 +26,12 @@ Thumbs.db
 .codex/
 .agents/
 .aws/
+
+# 本地推理与浏览器测试缓存（可重新生成）
+.work/
+/work/
+/data/.semantic_eval_cache/
+/data/.semantic_cache/
+/data/semantic_cache/
+/data/semantic_library.npz
+/data/semantic_library.meta.json

@@ -98,7 +98,10 @@ flowchart LR
 | 音频播放 | ✅ 已接入真实 MP3 播放，支持跳转到命中段落起始秒 + 2s 渐入 + 段落循环/整首连播 |
 | 本地模型权重 | ✅ 已下载至 `model/`（`allin1`、`Chinese-CLIP`、`EmoSet-ViT`、`LAION-CLAP`） |
 | 音乐切段流水线 | ✅ 已实现基于 FFmpeg PCM + 对数响度/频谱新颖度的离线切段脚本 `pipeline/analyze_demo_list.mjs` |
-| 后端服务（模型在线推理） | ⛔ 待接入（将 `Chinese-CLIP` + `LAION-CLAP` 深度向量与当前声学/色彩特征融合） |
+| 后端服务（模型在线推理） | ✅ 已接入本地 Chinese-CLIP + CLAP 意境描述桥接，FastAPI 提供匹配；CPU 实跑通过，服务失败明确降级色彩规则 |
+| 新旧匹配对照 | ✅ `picture/` 183 张全量完成；首选覆盖 22→22，前三覆盖 27→29；结果见 `outputs/semantic-comparison/`，听感尚待盲测 |
+
+本轮语义实现位于 `server/`；离线建库为 `pipeline/build_semantic_index.py`，对照为 `pipeline/evaluate_semantic.py`。现有 `model/emoset-vit/` 实际是人脸表情模型，不用于风景意境。音乐边界仍使用旧声学规则，未接入 allin1。运行方式见 README。
 
 ---
 
